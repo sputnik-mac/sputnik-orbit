@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sputnik Orbit — 🛰️</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #header {
+      position: absolute;
+      top: 20px;
+      text-align: center;
+    }
+
+    #header h1 {
+      font-size: 1.8rem;
+      letter-spacing: 0.4em;
+      color: #a0d8ff;
+      text-shadow: 0 0 20px #4af;
+    }
+
+    #header p {
+      font-size: 0.7rem;
+      color: #456;
+      letter-spacing: 0.3em;
+      margin-top: 4px;
+    }
+
+    canvas { display: block; }
+
+    #telemetry {
+      position: absolute;
+      bottom: 30px;
+      display: flex;
+      gap: 40px;
+      font-size: 0.7rem;
+      color: #4af;
+      letter-spacing: 0.15em;
+    }
+
+    .telem-block { text-align: center; }
+    .telem-label { color: #456; font-size: 0.6rem; margin-bottom: 4px; }
+    .telem-value { color: #a0d8ff; text-shadow: 0 0 8px #4af; }
+
+    #mission-time {
+      position: absolute;
+      top: 90px;
+      font-size: 0.75rem;
+      color: #456;
+      letter-spacing: 0.2em;
+    }
+
+    #mission-time span { color: #7af; }
+
+    .signal {
+      display: inline-block;
+      width: 6px; height: 6px;
+      background: #0f0;
+      border-radius: 50%;
+      margin-right: 8px;
+      box-shadow: 0 0 8px #0f0;
+      animation: blink 1.2s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🛰️ SPUTNIK-MAC</h1>
+  <p>AUTONOMOUS ORBITAL ASSISTANT · ONLINE</p>
+</div>
+
+<div id="mission-time">
+  <span class="signal"></span>MISSION TIME: <span id="clock">--</span>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="telemetry">
+  <div class="telem-block">
+    <div class="telem-label">ALTITUDE</div>
+    <div class="telem-value" id="alt">559 km</div>
+  </div>
+  <div class="telem-block">
+    <div class="telem-label">VELOCITY</div>
+    <div class="telem-value" id="vel">7.91 km/s</div>
+  </div>
+  <div class="telem-block">
+    <div class="telem-label">ORBIT</div>
+    <div class="telem-value" id="orb">#001</div>
+  </div>
+  <div class="telem-block">
+    <div class="telem-label">SIGNAL</div>
+    <div class="telem-value" id="sig">NOMINAL</div>
+  </div>
+  <div class="telem-block">
+    <div class="telem-label">UPTIME</div>
+    <div class="telem-value" id="uptime">00:00:00</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const cx = canvas.width / 2;
+const cy = canvas.height / 2;
+const earthR = Math.min(canvas.width, canvas.height) * 0.18;
+const orbitR = earthR * 1.85;
+
+// Stars
+const stars = Array.from({length: 200}, () => ({
+  x: Math.random() * canvas.width,
+  y: Math.random() * canvas.height,
+  r: Math.random() * 1.5,
+  alpha: Math.random()
+}));
+
+let angle = 0;
+let orbitCount = 1;
+let startTime = Date.now();
+const ORBIT_DURATION = 30000; // 30 sec per orbit
+
+function drawStars() {
+  stars.forEach(s => {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${0.3 + s.alpha * 0.7})`;
+    ctx.fill();
+    // Subtle twinkle
+    s.alpha = 0.5 + 0.5 * Math.sin(Date.now() / 1000 + s.x);
+  });
+}
+
+function drawEarth() {
+  // Glow
+  const glow = ctx.createRadialGradient(cx, cy, earthR * 0.8, cx, cy, earthR * 1.4);
+  glow.addColorStop(0, 'rgba(30,100,200,0.15)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, earthR * 1.4, 0, Math.PI * 2);
+  ctx.fillStyle = glow;
+  ctx.fill();
+
+  // Earth
+  const grad = ctx.createRadialGradient(cx - earthR * 0.3, cy - earthR * 0.3, 0, cx, cy, earthR);
+  grad.addColorStop(0, '#3a7fc1');
+  grad.addColorStop(0.4, '#1a5a99');
+  grad.addColorStop(0.75, '#0d3d6e');
+  grad.addColorStop(1, '#061a30');
+  ctx.beginPath();
+  ctx.arc(cx, cy, earthR, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Atmosphere ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, earthR, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(100,180,255,0.3)';
+  ctx.lineWidth = 6;
+  ctx.stroke();
+
+  // Land blobs
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, earthR, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(30,120,60,0.5)';
+  [[cx-20, cy-20, 30, 20], [cx+30, cy+10, 20, 15], [cx-40, cy+25, 25, 12]].forEach(([x,y,w,h]) => {
+    ctx.beginPath();
+    ctx.ellipse(x, y, w, h, 0.4, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawOrbitPath() {
+  ctx.beginPath();
+  ctx.setLineDash([4, 8]);
+  ctx.arc(cx, cy, orbitR, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(100,160,255,0.2)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawSputnik(x, y) {
+  // Signal waves behind
+  [1, 2, 3].forEach(i => {
+    const waveR = 12 + i * 8;
+    const waveAlpha = 0.15 - i * 0.04;
+    ctx.beginPath();
+    ctx.arc(x, y, waveR, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(160,220,255,${waveAlpha})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  });
+
+  // Body
+  ctx.beginPath();
+  ctx.arc(x, y, 7, 0, Math.PI * 2);
+  const sGrad = ctx.createRadialGradient(x - 2, y - 2, 0, x, y, 7);
+  sGrad.addColorStop(0, '#e0f0ff');
+  sGrad.addColorStop(1, '#6ab0ff');
+  ctx.fillStyle = sGrad;
+  ctx.fill();
+  ctx.strokeStyle = '#4af';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Antennas (4 directions, rotated with satellite)
+  const antAngles = [angle + 0.3, angle + 1.0, angle + Math.PI + 0.3, angle + Math.PI + 1.0];
+  antAngles.forEach(a => {
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(a) * 16, y + Math.sin(a) * 16);
+    ctx.strokeStyle = '#89d4ff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Tip dot
+    ctx.beginPath();
+    ctx.arc(x + Math.cos(a) * 16, y + Math.sin(a) * 16, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+  });
+
+  // Glow
+  const glow2 = ctx.createRadialGradient(x, y, 4, x, y, 20);
+  glow2.addColorStop(0, 'rgba(100,200,255,0.3)');
+  glow2.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.beginPath();
+  ctx.arc(x, y, 20, 0, Math.PI * 2);
+  ctx.fillStyle = glow2;
+  ctx.fill();
+}
+
+function drawSignalLine(sx, sy) {
+  const pulseAlpha = 0.15 + 0.1 * Math.sin(Date.now() / 200);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(sx, sy);
+  ctx.strokeStyle = `rgba(100,200,255,${pulseAlpha})`;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+
+  const elapsed = Date.now() - startTime;
+  const h = Math.floor(elapsed / 3600000);
+  const m = Math.floor((elapsed % 3600000) / 60000);
+  const s = Math.floor((elapsed % 60000) / 1000);
+  document.getElementById('uptime').textContent =
+    String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+
+  const newOrbit = Math.floor(elapsed / ORBIT_DURATION) + 1;
+  if (newOrbit !== orbitCount) {
+    orbitCount = newOrbit;
+    document.getElementById('orb').textContent = '#' + String(orbitCount).padStart(3,'0');
+  }
+
+  // Fake wobble on telemetry
+  document.getElementById('alt').textContent = (559 + Math.sin(elapsed/8000) * 3).toFixed(1) + ' km';
+  document.getElementById('vel').textContent = (7.91 + Math.sin(elapsed/12000) * 0.02).toFixed(3) + ' km/s';
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawStars();
+  drawOrbitPath();
+
+  const sx = cx + Math.cos(angle) * orbitR;
+  const sy = cy + Math.sin(angle) * orbitR;
+
+  drawSignalLine(sx, sy);
+  drawEarth();
+  drawSputnik(sx, sy);
+
+  angle += 0.008;
+  updateClock();
+
+  requestAnimationFrame(draw);
+}
+
+draw();
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>
